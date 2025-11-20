@@ -1,0 +1,291 @@
+package ch20.board;
+
+// javaScript -> 화면 표시가 분리
+// SQL 분리
+
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.Scanner;
+
+import ch20.Board;
+public class BoardExample4 {
+
+	//필드
+	private Scanner scanner = new Scanner(System.in);
+	private Connection conn;
+	private PreparedStatement pstmt;
+	private ResultSet rs;
+	
+	//생성자
+	public BoardExample4() { // 생성자에서 conn 객체 sql 접속
+		try {
+			Class.forName("oracle.jdbc.OracleDriver");
+			conn = DriverManager.getConnection("jdbc:oracle:thin:@localhost:1521/xe","testuser","test1234");
+			
+		} catch(Exception e) {
+			e.printStackTrace();
+			exit();
+			
+			
+		}
+	}
+	
+	//메소드
+	public void list() {
+		System.out.println();
+		System.out.println("[게시물 목록]");
+		System.out.println("--------------------------------------------------");
+		System.out.printf("%-6s%-12s%-16s%-40s\n","no","writer","date","title"); // 포맷팅이라 printf
+		System.out.println("--------------------------------------------------");
+		
+		// board 테이블에서 게시물 정보를 가져와서 출력하기
+		try {
+			String sql = "" +
+					"SELECT bno, btitle, bcontent, bwriter, bdate " +
+					"FROM boards " +
+					"ORDER BY bno DESC";
+			pstmt = conn.prepareStatement(sql);
+			rs = pstmt.executeQuery();
+			while(rs.next()) {
+				Board board = new Board();
+				board.setBno(rs.getInt("bno"));
+				board.setBtitle(rs.getString("btitle"));
+				board.setBcontent(rs.getString("bcontent"));
+				board.setBwriter(rs.getString("bwriter"));
+				board.setBdate(rs.getDate("bdate"));
+				System.out.printf("%-6s%-12s%-16s%-40s \n",
+						board.getBno(),
+						board.getBwriter(),
+						board.getBdate(),
+						board.getBtitle());
+			}
+			rs.close();
+			pstmt.close();
+		} catch(SQLException e) {
+			e.printStackTrace();
+			exit();
+		}
+		
+		//메인 메뉴 출력
+		mainMenu();
+	}
+	public void mainMenu() {
+		System.out.println();
+		System.out.println("---------------------------------------------");
+		System.out.println("메인 메뉴: 1.Create | 2.Read | 3.Clear | 4.Exit");
+		System.out.print("메뉴 선택: ");
+		String menuNo = scanner.nextLine();
+		System.out.println();
+		
+		switch(menuNo) {
+			case "1" -> create();
+			case "2" -> read();
+			case "3" -> clear();
+			case "4" -> exit();
+			default -> {
+				System.out.println("잘못된 입력입니다");
+				list();
+			}
+		}
+	}
+	
+	public void create() {
+		// 입력 받기
+		Board board = new Board();
+		System.out.println("[새 게시물 입력]");
+		System.out.print("제목: ");
+		board.setBtitle(scanner.nextLine());
+		System.out.print("내용: ");
+		board.setBcontent(scanner.nextLine());
+		System.out.print("작성자: ");
+		board.setBwriter(scanner.nextLine());
+		
+		// 보조 메뉴 출력
+		System.out.println("---------------------------------------------");
+		System.out.println("보조 메뉴: 1.Ok | 2.Cancel");
+		System.out.println("메뉴 선택: ");
+		String menuNo = scanner.nextLine();
+		if(menuNo.equals("1")){
+			// boards 테이블에 게시물 정보 저장
+			try {
+				String sql = ""+
+						"INSERT INTO boards (bno, btitle, bcontent, bwriter, bdate) "+
+						"VALUES (SEQ_BNO.NEXTVAL, ?, ?, ?, SYSDATE)";
+				pstmt = conn.prepareStatement(sql);
+				pstmt.setString(1, board.getBtitle());
+				pstmt.setString(2, board.getBcontent());
+				pstmt.setString(3, board.getBwriter());
+				pstmt.executeUpdate();
+			} catch(Exception e) {
+				e.printStackTrace();
+				exit();
+			} finally {
+				try {pstmt.close();} catch(Exception e) {}
+			}
+			
+		} else if(menuNo.equals("2")) list();
+		else {
+			System.out.println("잘못된 입력입니다");
+			list();
+		}
+		list();
+	}
+	public void read() {
+		// 입력 받기
+		System.out.println("[게시물 읽기]");
+		System.out.print("bno: ");
+		int bno = Integer.parseInt(scanner.nextLine());
+		
+		// boards 테이블에서 해당 게시물을 가져와 출력
+		try {
+			String sql = "" +
+					"SELECT bno, btitle, bcontent, bwriter, bdate "+
+					"FROM boards "+
+					"WHERE bno = ?";
+			pstmt = conn.prepareStatement(sql);
+			pstmt.setInt(1, bno);
+			rs = pstmt.executeQuery();
+			if(rs.next()) {
+				Board board = new Board();
+				board.setBno(rs.getInt("bno"));
+				board.setBtitle(rs.getString("btitle"));
+				board.setBcontent(rs.getString("bcontent"));
+				board.setBwriter(rs.getString("bwriter"));
+				board.setBdate(rs.getDate("bdate"));
+				System.out.println("##########");
+				System.out.println("번호: "+ board.getBno());
+				System.out.println("제목: "+ board.getBtitle());
+				System.out.println("내용: "+ board.getBcontent());
+				System.out.println("작성자: "+ board.getBwriter());
+				System.out.println("날짜: "+board.getBdate());
+				
+				// 보조 메뉴 출력
+				System.out.println("-------------------------------------");
+				System.out.println("보조 메뉴: 1.Update | 2.Delete | 3.List");
+				System.out.println("메뉴 선택: ");
+				String menuNo = scanner.nextLine();
+				System.out.println();
+				
+				if(menuNo.equals("1")) {
+					update(board);
+				} else if (menuNo.equals("2")) {
+					delete(board);
+				} else if (menuNo.equals("3")) {
+					list();
+				} else {
+					System.out.println("잘못된 입력입니다.");
+					list();
+				}
+				System.out.println("##########");
+				
+			}
+		} catch(Exception e) {
+			e.printStackTrace();
+			exit();
+		} finally {
+			try {rs.close();} catch(Exception e) {}
+			try {pstmt.close();} catch(Exception e) {}
+		}
+		list();
+	}
+	public void update(Board board) {
+		// 수정 내용 입력 받기
+		System.out.println("[수정 내용 입력]");
+		System.out.print("제목: ");
+		board.setBtitle(scanner.nextLine());
+		System.out.print("내용: ");
+		board.setBcontent(scanner.nextLine());
+		System.out.print("작성자: ");
+		board.setBwriter(scanner.nextLine());
+		
+		// 보조 메뉴 출력
+		System.out.println("----------------------------------");
+		System.out.println("보조 메뉴: 1.OK | 2.Cancel");
+		System.out.print("메뉴 선택: ");
+		String menuNo = scanner.nextLine();
+		if(menuNo.equals("1")) {
+			// boards 테이블에서 게시물 정보 수정
+			try {
+				String sql = ""+
+						"UPDATE boards SET btitle=?, bcontent=?, bwriter=? "+
+						"WHERE bno=?";
+				
+				pstmt = conn.prepareStatement(sql);
+				pstmt.setString(1, board.getBtitle());
+				pstmt.setString(2, board.getBcontent());
+				pstmt.setString(3, board.getBwriter());
+				pstmt.setInt(4, board.getBno());
+				pstmt.executeUpdate();
+				
+			} catch (Exception e) {
+				e.printStackTrace();
+				exit();
+			} finally {
+				try {pstmt.close();} catch(Exception e) {}
+			}
+		}
+		list();
+	}
+	public void delete(Board board) {
+		//int bno = board.getBno();
+		System.out.println("게시물을 삭제하시겠습니까?");
+		System.out.println("보조 메뉴: 1.Ok | 2.Cancel");
+		System.out.print("메뉴 선택 : ");
+		String menuNo = scanner.nextLine();
+		if(menuNo.equals("1")) {
+			try {
+				String sql = ""+
+						"DELETE FROM boards WHERE bno=?";
+				pstmt = conn.prepareStatement(sql);
+				pstmt.setInt(1,board.getBno());
+				pstmt.executeUpdate();
+			} catch(Exception e) {
+				e.printStackTrace();
+				exit();
+			} finally {
+				try {pstmt.close();} catch(Exception e) {}
+			}
+		}
+		
+		list();
+	}
+	public void clear() {
+		// 게시물 전체 삭제 truncate?
+		System.out.println("[게시물 전체 삭제]");
+		System.out.println("-------------------------------------------");
+		System.out.println("보조 메뉴: 1.Ok | 2. Cancel");
+		System.out.print("메뉴 선택: ");
+		String menuNo = scanner.nextLine();
+		if(menuNo.equals("1")) {
+			try {
+				String sql = "TRUNCATE TABLE boards";
+				pstmt = conn.prepareStatement(sql);
+				pstmt.executeUpdate();
+			} catch (Exception e) {
+				e.printStackTrace();
+				exit();
+			} finally {
+				try {pstmt.close();} catch(Exception e) {}
+			}
+		}
+		list();
+	}
+	public void exit() {
+		if(conn!=null) {
+			try {
+				conn.close();
+				
+			} catch(SQLException e) {}
+		}
+		System.out.println("** 게시판 종료 **");
+		System.exit(0);
+	}
+	
+	public static void main(String args[]) {
+		BoardExample4 boardExample = new BoardExample4();
+		boardExample.list();
+	}
+}
